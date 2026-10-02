@@ -1,93 +1,74 @@
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
-<meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-<title>Hitster Maison</title>
+  <title>Hitster de mon amie 🎵</title>
 
-<style>
-body{
-    font-family: Arial;
-    text-align:center;
-    background:#111;
-    color:white;
-    padding:40px;
-}
-
-button{
-    padding:15px 25px;
-    font-size:18px;
-    margin:10px;
-    border:none;
-    border-radius:10px;
-    cursor:pointer;
-}
-
-#songLink{
-    display:none;
-}
-
-a{
-    color:#00ff8c;
-}
-</style>
-
+  <link rel="stylesheet" href="style.css" />
 </head>
 
 <body>
 
-<h1>🎵 Hitster Maison</h1>
+  <main class="container">
 
-<h2 id="cardNumber"></h2>
+    <h1>🎵 Hitster</h1>
 
-<p>Quand vous êtes prêts :</p>
+    <p class="subtitle">
+      Le jeu musical
+    </p>
 
-<button onclick="playSong()">
-▶ Jouer la chanson
-</button>
+    <button id="loginButton">
+      Se connecter à Spotify
+    </button>
 
-<br><br>
+    <div id="app" class="hidden">
 
-<div id="songLink">
-    <a id="appleLink" target="_blank">
-        Ouvrir dans Apple Music
-    </a>
-</div>
+      <div class="status">
+        <span id="statusDot">●</span>
+        <span id="statusText">Connexion à Spotify...</span>
+      </div>
 
-<script>
+      <div class="player">
 
-const params = new URLSearchParams(window.location.search);
-const cardId = Number(params.get("id"));
+        <div class="album-placeholder">
+          🎵
+        </div>
 
-document.getElementById("cardNumber").innerText =
-"Carte #" + cardId;
+        <h2 id="songTitle">
+          Aucune chanson
+        </h2>
 
-let songUrl = "";
+        <p id="artistName">
+          Scanne une carte pour commencer
+        </p>
 
-fetch("cards.json")
-.then(response => response.json())
-.then(cards => {
+        <button id="playButton">
+          ▶️ Lecture / Pause
+        </button>
 
-    const card = cards.find(c => c.id === cardId);
+      </div>
 
-    if(card){
-        songUrl = card.url;
-    }
+      <div class="scanner">
 
-});
+        <h2>📱 Scanner une carte</h2>
 
-function playSong(){
+        <p>
+          La fonction de scan sera ajoutée à l'étape suivante.
+        </p>
 
-    document.getElementById("songLink").style.display =
-    "block";
+        <button id="testButton">
+          🎶 Tester avec une chanson
+        </button>
 
-    document.getElementById("appleLink").href =
-    songUrl;
+      </div>
 
-    window.open(songUrl, "_blank");
-}
+    </div>
 
-</script>
+  </main>
+
+  <script src="app.js"></script>
 
 </body>
 </html>
