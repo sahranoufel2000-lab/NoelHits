@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+
+<title>Hitster Maison</title>
+
+<style>
+body{
+    font-family: Arial;
+    text-align:center;
+    background:#111;
+    color:white;
+    padding:40px;
+}
+
+button{
+    padding:15px 25px;
+    font-size:18px;
+    margin:10px;
+    border:none;
+    border-radius:10px;
+    cursor:pointer;
+}
+
+#songLink{
+    display:none;
+}
+
+a{
+    color:#00ff8c;
+}
+</style>
+
+</head>
+
+<body>
+
+<h1>🎵 Hitster Maison</h1>
+
+<h2 id="cardNumber"></h2>
+
+<p>Quand vous êtes prêts :</p>
+
+<button onclick="playSong()">
+▶ Jouer la chanson
+</button>
+
+<br><br>
+
+<div id="songLink">
+    <a id="appleLink" target="_blank">
+        Ouvrir dans Apple Music
+    </a>
+</div>
+
+<script>
+
+const params = new URLSearchParams(window.location.search);
+const cardId = Number(params.get("id"));
+
+document.getElementById("cardNumber").innerText =
+"Carte #" + cardId;
+
+let songUrl = "";
+
+fetch("cards.json")
+.then(response => response.json())
+.then(cards => {
+
+    const card = cards.find(c => c.id === cardId);
+
+    if(card){
+        songUrl = card.url;
+    }
+
+});
+
+function playSong(){
+
+    document.getElementById("songLink").style.display =
+    "block";
+
+    document.getElementById("appleLink").href =
+    songUrl;
+
+    window.open(songUrl, "_blank");
+}
+
+</script>
+
+</body>
+</html>
