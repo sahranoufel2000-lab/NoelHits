@@ -1,21 +1,4 @@
-# /*
-
-NOELHITS
-Spotify + PKCE + Web Playback SDK
-=================================
-
-*/
-
-// ========================================
-// CONFIGURATION
-// ========================================
-
-const CLIENT_ID =
-"6574f3a475c2434b912779d5d0425890";
-
-// IMPORTANT:
-// Cette adresse doit être EXACTEMENT la même
-// que celle configurée dans Spotify Developer.
+const CLIENT_ID = "6574f3a475c2434b912779d5d0425890";
 
 const REDIRECT_URI =
 "https://sahranoufel2000-lab.github.io/NoelHits/";
@@ -32,21 +15,17 @@ const SCOPES = [
 // VARIABLES
 // ========================================
 
-let spotifyPlayer = null;
-
-let spotifyDeviceId = null;
-
 let accessToken = null;
+let spotifyPlayer = null;
+let spotifyDeviceId = null;
+let cards = [];
 
 // ========================================
-// ÉLÉMENTS HTML
+// HTML
 // ========================================
 
 const loginButton =
 document.getElementById("loginButton");
-
-const loginSection =
-document.getElementById("loginSection");
 
 const app =
 document.getElementById("app");
@@ -85,18 +64,16 @@ let result = "";
 for (let i = 0; i < length; i++) {
 
 ```
-result +=
-  characters.charAt(
-    Math.floor(
-      Math.random() * characters.length
-    )
-  );
+result += characters.charAt(
+  Math.floor(
+    Math.random() * characters.length
+  )
+);
 ```
 
 }
 
 return result;
-
 }
 
 async function generateCodeChallenge(
@@ -109,7 +86,7 @@ codeVerifier
 );
 
 const digest =
-await window.crypto.subtle.digest(
+await crypto.subtle.digest(
 "SHA-256",
 data
 );
@@ -122,11 +99,54 @@ String.fromCharCode(
 .replace(/+/g, "-")
 .replace(///g, "_")
 .replace(/=+$/, "");
-
 }
 
 // ========================================
-// LOGIN SPOTIFY
+// CHARGER LES CARTES
+// ========================================
+
+async function loadCards() {
+
+try {
+
+```
+const response =
+  await fetch("cards.json");
+
+if (!response.ok) {
+
+  throw new Error(
+    "Impossible de charger cards.json"
+  );
+
+}
+
+cards =
+  await response.json();
+
+console.log(
+  "Cartes chargées:",
+  cards
+);
+```
+
+} catch (error) {
+
+```
+console.error(
+  "Erreur cards.json:",
+  error
+);
+
+statusText.textContent =
+  "Erreur : impossible de charger les cartes.";
+```
+
+}
+}
+
+// ========================================
+// CONNEXION SPOTIFY
 // ========================================
 
 async function loginWithSpotify() {
@@ -183,11 +203,10 @@ new URLSearchParams({
 window.location.href =
 "https://accounts.spotify.com/authorize?" +
 params.toString();
-
 }
 
 // ========================================
-// RÉCUPÉRER LE TOKEN
+// CALLBACK SPOTIFY
 // ========================================
 
 async function handleCallback() {
@@ -200,19 +219,17 @@ window.location.search
 const code =
 params.get("code");
 
-const returnedState =
+const state =
 params.get("state");
 
 const error =
 params.get("error");
 
-// L'utilisateur a refusé
-
 if (error) {
 
 ```
 console.error(
-  "Spotify authorization error:",
+  "Erreur Spotify:",
   error
 );
 
@@ -224,9 +241,6 @@ return;
 
 }
 
-// Aucun code:
-// ce n'est pas un callback
-
 if (!code) {
 
 ```
@@ -235,21 +249,19 @@ return;
 
 }
 
-// Vérification CSRF
-
 const savedState =
 localStorage.getItem(
 "spotify_state"
 );
 
 if (
-!returnedState ||
-returnedState !== savedState
+!state ||
+state !== savedState
 ) {
 
 ```
 alert(
-  "Erreur de sécurité lors de la connexion Spotify."
+  "Erreur de sécurité Spotify."
 );
 
 return;
@@ -261,18 +273,6 @@ const codeVerifier =
 localStorage.getItem(
 "spotify_code_verifier"
 );
-
-if (!codeVerifier) {
-
-```
-alert(
-  "Code PKCE introuvable."
-);
-
-return;
-```
-
-}
 
 const body =
 new URLSearchParams({
@@ -304,7 +304,8 @@ const response =
     "https://accounts.spotify.com/api/token",
     {
 
-      method: "POST",
+      method:
+        "POST",
 
       headers: {
 
@@ -324,18 +325,12 @@ const data =
   await response.json();
 
 
-console.log(
-  "Spotify token response:",
-  data
-);
-
-
 if (!response.ok) {
 
   console.error(data);
 
   alert(
-    "Spotify a refusé la connexion."
+    "Spotify n'a pas accepté la connexion."
   );
 
   return;
@@ -353,9 +348,6 @@ localStorage.setItem(
 );
 
 
-// Spotify fournit normalement
-// un refresh token avec PKCE.
-
 if (data.refresh_token) {
 
   localStorage.setItem(
@@ -366,8 +358,6 @@ if (data.refresh_token) {
 }
 
 
-// Nettoyage
-
 localStorage.removeItem(
   "spotify_code_verifier"
 );
@@ -376,6 +366,8 @@ localStorage.removeItem(
   "spotify_state"
 );
 
+
+// Enlève ?code=... de l'adresse
 
 window.history.replaceState(
   {},
@@ -392,13 +384,11 @@ startApplication();
 ```
 console.error(error);
 
-alert(
-  "Impossible de contacter Spotify."
-);
+statusText.textContent =
+  "Erreur de connexion Spotify.";
 ```
 
 }
-
 }
 
 // ========================================
@@ -406,30 +396,6 @@ alert(
 // ========================================
 
 function startApplication() {
-
-loginSection.classList.add(
-"hidden"
-);
-
-app.classList.remove(
-"hidden"
-);
-
-statusText.textContent =
-"Connexion au lecteur Spotify...";
-
-statusDot.style.color =
-"#1db954";
-
-initializeSpotifyPlayer();
-
-}
-
-// ========================================
-// INITIALISER LE WEB PLAYBACK SDK
-// ========================================
-
-function initializeSpotifyPlayer() {
 
 if (!accessToken) {
 
@@ -442,19 +408,37 @@ accessToken =
 
 }
 
+loginButton.classList.add(
+"hidden"
+);
+
+app.classList.remove(
+"hidden"
+);
+
+statusText.textContent =
+"Connexion au lecteur Spotify...";
+
+initializeSpotifyPlayer();
+}
+
+// ========================================
+// INITIALISER SPOTIFY PLAYER
+// ========================================
+
+function initializeSpotifyPlayer() {
+
 if (!accessToken) {
 
 ```
 console.error(
-  "Aucun access token."
+  "Pas de token Spotify."
 );
 
 return;
 ```
 
 }
-
-// Vérifie que le SDK est chargé
 
 if (
 typeof Spotify ===
@@ -463,9 +447,17 @@ typeof Spotify ===
 
 ```
 console.log(
-  "Spotify SDK pas encore chargé."
+  "Spotify SDK n'est pas encore chargé."
 );
 
+return;
+```
+
+}
+
+if (spotifyPlayer) {
+
+```
 return;
 ```
 
@@ -493,9 +485,9 @@ new Spotify.Player({
 });
 ```
 
-// ====================================
+// ------------------------------------
 // PLAYER PRÊT
-// ====================================
+// ------------------------------------
 
 spotifyPlayer.addListener(
 "ready",
@@ -503,7 +495,7 @@ spotifyPlayer.addListener(
 
 ```
   console.log(
-    "Spotify Player prêt:",
+    "NoelHits Spotify Device:",
     device_id
   );
 
@@ -519,14 +511,20 @@ spotifyPlayer.addListener(
   statusDot.style.color =
     "#1db954";
 
+
+  // Vérifie immédiatement
+  // s'il y a une carte dans l'URL
+
+  checkCardFromURL();
+
 }
 ```
 
 );
 
-// ====================================
-// PLAYER DÉCONNECTÉ
-// ====================================
+// ------------------------------------
+// PLAYER HORS LIGNE
+// ------------------------------------
 
 spotifyPlayer.addListener(
 "not_ready",
@@ -534,22 +532,22 @@ spotifyPlayer.addListener(
 
 ```
   console.log(
-    "Spotify Player hors ligne:",
+    "Device hors ligne:",
     device_id
   );
 
 
   statusText.textContent =
-    "Lecteur Spotify déconnecté.";
+    "Le lecteur Spotify est hors ligne.";
 
 }
 ```
 
 );
 
-// ====================================
+// ------------------------------------
 // ERREURS
-// ====================================
+// ------------------------------------
 
 spotifyPlayer.addListener(
 "initialization_error",
@@ -562,7 +560,7 @@ spotifyPlayer.addListener(
   );
 
   statusText.textContent =
-    "Erreur d'initialisation Spotify.";
+    "Erreur du lecteur Spotify.";
 
 }
 ```
@@ -598,7 +596,7 @@ spotifyPlayer.addListener(
   );
 
   statusText.textContent =
-    "Un compte Spotify Premium est requis.";
+    "Spotify Premium est requis.";
 
 }
 ```
@@ -616,16 +614,16 @@ spotifyPlayer.addListener(
   );
 
   statusText.textContent =
-    "Erreur de lecture Spotify.";
+    "Erreur pendant la lecture.";
 
 }
 ```
 
 );
 
-// ====================================
+// ------------------------------------
 // CHANGEMENT DE CHANSON
-// ====================================
+// ------------------------------------
 
 spotifyPlayer.addListener(
 "player_state_changed",
@@ -641,7 +639,7 @@ state => {
 
   const track =
     state.track_window
-      .current_track;
+      ?.current_track;
 
 
   if (!track) {
@@ -667,59 +665,303 @@ state => {
 
 );
 
-// ====================================
-// CONNECTER LE PLAYER
-// ====================================
+// ------------------------------------
+// CONNECTER
+// ------------------------------------
 
-spotifyPlayer.connect();
+spotifyPlayer
+.connect()
+.then(success => {
+
+```
+  console.log(
+    "Spotify player connecté:",
+    success
+  );
+
+});
+```
 
 }
 
 // ========================================
-// LECTURE / PAUSE
+// JOUER UNE CARTE
 // ========================================
 
-playButton.addEventListener(
-"click",
-async () => {
+async function playCard(cardNumber) {
+
+cardNumber =
+Number(cardNumber);
+
+if (!cardNumber) {
 
 ```
-if (!spotifyPlayer) {
+alert(
+  "Numéro de carte invalide."
+);
 
-  alert(
-    "Le lecteur Spotify n'est pas encore prêt."
+return;
+```
+
+}
+
+// Vérifier que le lecteur existe
+
+if (!spotifyDeviceId) {
+
+```
+alert(
+  "Le lecteur Spotify n'est pas encore prêt."
+);
+
+return;
+```
+
+}
+
+// Chercher la carte
+
+const card =
+cards.find(
+item =>
+Number(item.id) ===
+cardNumber
+);
+
+if (!card) {
+
+```
+alert(
+  `Carte ${cardNumber} introuvable.`
+);
+
+return;
+```
+
+}
+
+// ------------------------------------
+// IMPORTANT
+//
+// Chaque carte doit avoir :
+//
+// spotifyId:
+// "XXXXXXXXXXXX"
+// ------------------------------------
+
+if (!card.spotifyId) {
+
+```
+alert(
+  `La carte ${cardNumber} n'a pas encore de Spotify ID.`
+);
+
+console.error(
+  "Carte sans spotifyId:",
+  card
+);
+
+return;
+```
+
+}
+
+const spotifyURI =
+`spotify:track:${card.spotifyId}`;
+
+console.log(
+"Lecture:",
+spotifyURI
+);
+
+statusText.textContent =
+`Carte ${cardNumber} 🎵`;
+
+songTitle.textContent =
+"Chargement...";
+
+artistName.textContent =
+"Spotify";
+
+try {
+
+```
+const response =
+  await fetch(
+    "https://api.spotify.com/v1/me/player/play" +
+    `?device_id=${encodeURIComponent(
+      spotifyDeviceId
+    )}`,
+    {
+
+      method:
+        "PUT",
+
+      headers: {
+
+        Authorization:
+          `Bearer ${accessToken}`,
+
+        "Content-Type":
+          "application/json"
+
+      },
+
+      body:
+        JSON.stringify({
+
+          uris:
+            [spotifyURI],
+
+          position_ms:
+            0
+
+        })
+
+    }
   );
+
+
+if (!response.ok) {
+
+  const errorText =
+    await response.text();
+
+  console.error(
+    "Spotify playback error:",
+    errorText
+  );
+
+
+  statusText.textContent =
+    "Spotify n'a pas pu lancer la chanson.";
+
 
   return;
 
 }
 
 
-await spotifyPlayer.togglePlay();
+console.log(
+  "🎵 Chanson lancée!"
+);
+
+
+statusText.textContent =
+  `🎵 Carte ${cardNumber} — lecture en cours`;
+```
+
+} catch (error) {
+
+```
+console.error(error);
+
+statusText.textContent =
+  "Erreur de communication avec Spotify.";
 ```
 
 }
-);
+}
 
 // ========================================
-// TEST
+// LIRE ?card=1 DANS L'URL
 // ========================================
+
+function checkCardFromURL() {
+
+const params =
+new URLSearchParams(
+window.location.search
+);
+
+const cardNumber =
+params.get("card");
+
+if (!cardNumber) {
+
+```
+return;
+```
+
+}
+
+console.log(
+"Carte trouvée dans URL:",
+cardNumber
+);
+
+playCard(cardNumber);
+
+}
+
+// ========================================
+// BOUTON PLAY / PAUSE
+// ========================================
+
+if (playButton) {
+
+playButton.addEventListener(
+"click",
+async () => {
+
+```
+  if (!spotifyPlayer) {
+
+    alert(
+      "Le lecteur Spotify n'est pas prêt."
+    );
+
+    return;
+
+  }
+
+
+  await spotifyPlayer.togglePlay();
+
+}
+```
+
+);
+
+}
+
+// ========================================
+// TEST MANUEL
+// ========================================
+
+if (testButton) {
 
 testButton.addEventListener(
 "click",
 () => {
 
 ```
-alert(
-  "Le scanner de cartes sera connecté ici 🎴"
-);
-```
+  const cardNumber =
+    prompt(
+      "Quel numéro de carte veux-tu jouer ?"
+    );
+
+
+  if (
+    cardNumber !== null &&
+    cardNumber.trim() !== ""
+  ) {
+
+    playCard(
+      cardNumber.trim()
+    );
+
+  }
 
 }
+```
+
 );
 
+}
+
 // ========================================
-// SDK SPOTIFY
+// SPOTIFY SDK
 // ========================================
 
 window.onSpotifyWebPlaybackSDKReady =
@@ -731,19 +973,16 @@ console.log(
 );
 
 
-const existingToken =
+const savedToken =
   localStorage.getItem(
     "spotify_access_token"
   );
 
 
-if (
-  existingToken &&
-  !accessToken
-) {
+if (savedToken) {
 
   accessToken =
-    existingToken;
+    savedToken;
 
 
   startApplication();
@@ -757,23 +996,42 @@ if (
 // INITIALISATION
 // ========================================
 
-handleCallback();
+(async function init() {
 
-// Si déjà connecté
+await loadCards();
 
-const existingToken =
+await handleCallback();
+
+const savedToken =
 localStorage.getItem(
 "spotify_access_token"
 );
 
 if (
-existingToken &&
-!window.location.search
+savedToken &&
+!window.location.search.includes(
+"code="
+)
 ) {
 
+```
 accessToken =
-existingToken;
+  savedToken;
 
-startApplication();
+
+// Le SDK appellera normalement
+// onSpotifyWebPlaybackSDKReady.
+
+if (
+  typeof Spotify !==
+  "undefined"
+) {
+
+  startApplication();
 
 }
+```
+
+}
+
+})();
