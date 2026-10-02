@@ -1,42 +1,18 @@
 [
   {
     "id": 1,
-    "url": "https://music.apple.com/us/song/solar-eclipse/6818209989"
+    "spotifyId": "2nkjqzXz5l9xEaf5XyXBZ1"
   },
   {
     "id": 2,
-    "url": "https://music.apple.com/us/song/see-you-in-my-dreams-feat-sza/6791645430"
+    "spotifyId": "771W83HUbhx1WP8CDXdBNL"
   },
   {
     "id": 3,
-    "url": "https://music.apple.com/us/song/draw-you-out/6814871229"
+    "spotifyId": "55q3Ro66yXWi9rsEddeEN4"
   },
   {
     "id": 4,
-    "url": "https://music.apple.com/us/song/ba/6809921246"
-  },
-  {
-    "id": 5,
-    "url": "https://music.apple.com/us/song/snakeskin-boots/6775919764"
-  },
-  {
-    "id": 6,
-    "url": "https://music.apple.com/us/song/2008/6816805550"
-  },
-  {
-    "id": 7,
-    "url": "https://music.apple.com/us/song/channel-13/6802879637"
-  },
-  {
-    "id": 8,
-    "url": "https://music.apple.com/us/song/danger-danger/6812546587"
-  },
-  {
-    "id": 9,
-    "url": "https://music.apple.com/us/song/too-cute-to-be-lonely/6805958228"
-  },
-  {
-    "id": 10,
-    "url": "https://music.apple.com/us/song/private-lives/6805979955"
+    "spotifyId": "7uTrA7T7ZXPonAcLee3Ou9"
   }
 ]
