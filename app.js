@@ -1,1037 +1,530 @@
 const CLIENT_ID = "6574f3a475c2434b912779d5d0425890";
-
-const REDIRECT_URI =
-"https://sahranoufel2000-lab.github.io/NoelHits/";
+const REDIRECT_URI = "https://sahranoufel2000-lab.github.io/NoelHits/";
 
 const SCOPES = [
-"streaming",
-"user-read-email",
-"user-read-private",
-"user-read-playback-state",
-"user-modify-playback-state"
+  "streaming",
+  "user-read-email",
+  "user-read-private",
+  "user-read-playback-state",
+  "user-modify-playback-state"
 ].join(" ");
 
-// ========================================
+// ===============================
+// PKCE
+// ===============================
+
+function generateRandomString(length) {
+  const possible =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+  let text = "";
+
+  for (let i = 0; i < length; i++) {
+    text += possible.charAt(
+      Math.floor(Math.random() * possible.length)
+    );
+  }
+
+  return text;
+}
+
+async function generateCodeChallenge(verifier) {
+  const data = new TextEncoder().encode(verifier);
+
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    data
+  );
+
+  return btoa(
+    String.fromCharCode(...new Uint8Array(digest))
+  )
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+
+// ===============================
+// CONNEXION SPOTIFY
+// ===============================
+
+async function loginSpotify() {
+
+  console.log("Bouton Spotify cliqué");
+
+  const verifier = generateRandomString(128);
+
+  localStorage.setItem(
+    "spotify_code_verifier",
+    verifier
+  );
+
+  const challenge =
+    await generateCodeChallenge(verifier);
+
+  const authUrl =
+    "https://accounts.spotify.com/authorize?" +
+    new URLSearchParams({
+      response_type: "code",
+      client_id: CLIENT_ID,
+      scope: SCOPES,
+      redirect_uri: REDIRECT_URI,
+      code_challenge_method: "S256",
+      code_challenge: challenge
+    });
+
+  console.log("Redirection vers Spotify...");
+
+  window.location.href = authUrl;
+}
+
+
+// ===============================
+// RÉCUPÉRER LE TOKEN
+// ===============================
+
+async function getAccessToken() {
+
+  const params =
+    new URLSearchParams(window.location.search);
+
+  const code = params.get("code");
+
+  if (!code) {
+    return null;
+  }
+
+  const verifier =
+    localStorage.getItem("spotify_code_verifier");
+
+  if (!verifier) {
+    console.error("Code verifier introuvable.");
+    return null;
+  }
+
+  const response = await fetch(
+    "https://accounts.spotify.com/api/token",
+    {
+      method: "POST",
+
+      headers: {
+        "Content-Type":
+          "application/x-www-form-urlencoded"
+      },
+
+      body: new URLSearchParams({
+        client_id: CLIENT_ID,
+        grant_type: "authorization_code",
+        code: code,
+        redirect_uri: REDIRECT_URI,
+        code_verifier: verifier
+      })
+    }
+  );
+
+  const data = await response.json();
+
+  if (data.access_token) {
+
+    localStorage.setItem(
+      "spotify_access_token",
+      data.access_token
+    );
+
+    // Nettoyer l'URL
+    window.history.replaceState(
+      {},
+      document.title,
+      window.location.pathname
+    );
+
+    return data.access_token;
+  }
+
+  console.error(
+    "Erreur Spotify:",
+    data
+  );
+
+  return null;
+}
+
+
+// ===============================
 // VARIABLES
-// ========================================
+// ===============================
 
 let accessToken = null;
 let spotifyPlayer = null;
 let spotifyDeviceId = null;
-let cards = [];
 
-// ========================================
-// HTML
-// ========================================
 
-const loginButton =
-document.getElementById("loginButton");
+// ===============================
+// INITIALISATION
+// ===============================
 
-const app =
-document.getElementById("app");
+async function initialize() {
 
-const statusText =
-document.getElementById("statusText");
+  console.log("Application NoelHits démarrée");
 
-const statusDot =
-document.getElementById("statusDot");
+  accessToken =
+    localStorage.getItem(
+      "spotify_access_token"
+    );
 
-const playButton =
-document.getElementById("playButton");
+  const newToken =
+    await getAccessToken();
 
-const testButton =
-document.getElementById("testButton");
+  if (newToken) {
+    accessToken = newToken;
+  }
 
-const songTitle =
-document.getElementById("songTitle");
+  const loginButton =
+    document.getElementById("loginButton");
 
-const artistName =
-document.getElementById("artistName");
+  if (loginButton) {
 
-// ========================================
-// PKCE
-// ========================================
+    loginButton.addEventListener(
+      "click",
+      loginSpotify
+    );
 
-function generateRandomString(length) {
+    console.log(
+      "Bouton Spotify connecté"
+    );
+  }
 
-const characters =
-"ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
-"abcdefghijklmnopqrstuvwxyz" +
-"0123456789";
+  if (!accessToken) {
 
-let result = "";
+    console.log(
+      "Pas encore connecté à Spotify"
+    );
 
-for (let i = 0; i < length; i++) {
+    return;
+  }
 
-```
-result += characters.charAt(
-  Math.floor(
-    Math.random() * characters.length
-  )
-);
-```
-
+  startSpotifyPlayer();
 }
 
-return result;
-}
 
-async function generateCodeChallenge(
-codeVerifier
-) {
+// ===============================
+// SPOTIFY WEB PLAYBACK SDK
+// ===============================
 
-const data =
-new TextEncoder().encode(
-codeVerifier
-);
+function startSpotifyPlayer() {
 
-const digest =
-await crypto.subtle.digest(
-"SHA-256",
-data
-);
-
-return btoa(
-String.fromCharCode(
-...new Uint8Array(digest)
-)
-)
-.replace(/+/g, "-")
-.replace(///g, "_")
-.replace(/=+$/, "");
-}
-
-// ========================================
-// CHARGER LES CARTES
-// ========================================
-
-async function loadCards() {
-
-try {
-
-```
-const response =
-  await fetch("cards.json");
-
-if (!response.ok) {
-
-  throw new Error(
-    "Impossible de charger cards.json"
+  console.log(
+    "Initialisation du lecteur Spotify..."
   );
 
-}
+  if (
+    typeof window.Spotify === "undefined"
+  ) {
 
-cards =
-  await response.json();
+    console.log(
+      "Spotify SDK pas encore chargé."
+    );
 
-console.log(
-  "Cartes chargées:",
-  cards
-);
-```
+    return;
+  }
 
-} catch (error) {
+  spotifyPlayer =
+    new Spotify.Player({
 
-```
-console.error(
-  "Erreur cards.json:",
-  error
-);
+      name: "NoelHits",
 
-statusText.textContent =
-  "Erreur : impossible de charger les cartes.";
-```
-
-}
-}
-
-// ========================================
-// CONNEXION SPOTIFY
-// ========================================
-
-async function loginWithSpotify() {
-
-const codeVerifier =
-generateRandomString(128);
-
-localStorage.setItem(
-"spotify_code_verifier",
-codeVerifier
-);
-
-const codeChallenge =
-await generateCodeChallenge(
-codeVerifier
-);
-
-const state =
-generateRandomString(16);
-
-localStorage.setItem(
-"spotify_state",
-state
-);
-
-const params =
-new URLSearchParams({
-
-```
-  client_id:
-    CLIENT_ID,
-
-  response_type:
-    "code",
-
-  redirect_uri:
-    REDIRECT_URI,
-
-  scope:
-    SCOPES,
-
-  state:
-    state,
-
-  code_challenge_method:
-    "S256",
-
-  code_challenge:
-    codeChallenge
-
-});
-```
-
-window.location.href =
-"https://accounts.spotify.com/authorize?" +
-params.toString();
-}
-
-// ========================================
-// CALLBACK SPOTIFY
-// ========================================
-
-async function handleCallback() {
-
-const params =
-new URLSearchParams(
-window.location.search
-);
-
-const code =
-params.get("code");
-
-const state =
-params.get("state");
-
-const error =
-params.get("error");
-
-if (error) {
-
-```
-console.error(
-  "Erreur Spotify:",
-  error
-);
-
-statusText.textContent =
-  "Connexion Spotify annulée.";
-
-return;
-```
-
-}
-
-if (!code) {
-
-```
-return;
-```
-
-}
-
-const savedState =
-localStorage.getItem(
-"spotify_state"
-);
-
-if (
-!state ||
-state !== savedState
-) {
-
-```
-alert(
-  "Erreur de sécurité Spotify."
-);
-
-return;
-```
-
-}
-
-const codeVerifier =
-localStorage.getItem(
-"spotify_code_verifier"
-);
-
-const body =
-new URLSearchParams({
-
-```
-  client_id:
-    CLIENT_ID,
-
-  grant_type:
-    "authorization_code",
-
-  code:
-    code,
-
-  redirect_uri:
-    REDIRECT_URI,
-
-  code_verifier:
-    codeVerifier
-
-});
-```
-
-try {
-
-```
-const response =
-  await fetch(
-    "https://accounts.spotify.com/api/token",
-    {
-
-      method:
-        "POST",
-
-      headers: {
-
-        "Content-Type":
-          "application/x-www-form-urlencoded"
-
+      getOAuthToken: callback => {
+        callback(accessToken);
       },
 
-      body:
-        body
-
-    }
-  );
+      volume: 0.8
+    });
 
 
-const data =
-  await response.json();
+  spotifyPlayer.addListener(
+    "ready",
+    ({ device_id }) => {
 
-
-if (!response.ok) {
-
-  console.error(data);
-
-  alert(
-    "Spotify n'a pas accepté la connexion."
-  );
-
-  return;
-
-}
-
-
-accessToken =
-  data.access_token;
-
-
-localStorage.setItem(
-  "spotify_access_token",
-  accessToken
-);
-
-
-if (data.refresh_token) {
-
-  localStorage.setItem(
-    "spotify_refresh_token",
-    data.refresh_token
-  );
-
-}
-
-
-localStorage.removeItem(
-  "spotify_code_verifier"
-);
-
-localStorage.removeItem(
-  "spotify_state"
-);
-
-
-// Enlève ?code=... de l'adresse
-
-window.history.replaceState(
-  {},
-  document.title,
-  window.location.pathname
-);
-
-
-startApplication();
-```
-
-} catch (error) {
-
-```
-console.error(error);
-
-statusText.textContent =
-  "Erreur de connexion Spotify.";
-```
-
-}
-}
-
-// ========================================
-// DÉMARRER L'APPLICATION
-// ========================================
-
-function startApplication() {
-
-if (!accessToken) {
-
-```
-accessToken =
-  localStorage.getItem(
-    "spotify_access_token"
-  );
-```
-
-}
-
-loginButton.classList.add(
-"hidden"
-);
-
-app.classList.remove(
-"hidden"
-);
-
-statusText.textContent =
-"Connexion au lecteur Spotify...";
-
-initializeSpotifyPlayer();
-}
-
-// ========================================
-// INITIALISER SPOTIFY PLAYER
-// ========================================
-
-function initializeSpotifyPlayer() {
-
-if (!accessToken) {
-
-```
-console.error(
-  "Pas de token Spotify."
-);
-
-return;
-```
-
-}
-
-if (
-typeof Spotify ===
-"undefined"
-) {
-
-```
-console.log(
-  "Spotify SDK n'est pas encore chargé."
-);
-
-return;
-```
-
-}
-
-if (spotifyPlayer) {
-
-```
-return;
-```
-
-}
-
-spotifyPlayer =
-new Spotify.Player({
-
-```
-  name:
-    "NoelHits 🎄",
-
-  volume:
-    0.7,
-
-  getOAuthToken:
-    callback => {
-
-      callback(
-        accessToken
+      console.log(
+        "Spotify prêt. Device:",
+        device_id
       );
 
+      spotifyDeviceId =
+        device_id;
+
+      const statusText =
+        document.getElementById(
+          "statusText"
+        );
+
+      if (statusText) {
+        statusText.textContent =
+          "Spotify est prêt 🎵";
+      }
+
+      const statusDot =
+        document.getElementById(
+          "statusDot"
+        );
+
+      if (statusDot) {
+        statusDot.classList.add(
+          "connected"
+        );
+      }
+
+      checkCardFromURL();
     }
-
-});
-```
-
-// ------------------------------------
-// PLAYER PRÊT
-// ------------------------------------
-
-spotifyPlayer.addListener(
-"ready",
-({ device_id }) => {
-
-```
-  console.log(
-    "NoelHits Spotify Device:",
-    device_id
   );
 
 
-  spotifyDeviceId =
-    device_id;
+  spotifyPlayer.addListener(
+    "not_ready",
+    ({ device_id }) => {
 
-
-  statusText.textContent =
-    "Spotify est prêt 🎵";
-
-
-  statusDot.style.color =
-    "#1db954";
-
-
-  // Vérifie immédiatement
-  // s'il y a une carte dans l'URL
-
-  checkCardFromURL();
-
-}
-```
-
-);
-
-// ------------------------------------
-// PLAYER HORS LIGNE
-// ------------------------------------
-
-spotifyPlayer.addListener(
-"not_ready",
-({ device_id }) => {
-
-```
-  console.log(
-    "Device hors ligne:",
-    device_id
+      console.log(
+        "Spotify non disponible:",
+        device_id
+      );
+    }
   );
 
 
-  statusText.textContent =
-    "Le lecteur Spotify est hors ligne.";
+  spotifyPlayer.addListener(
+    "initialization_error",
+    ({ message }) => {
 
-}
-```
-
-);
-
-// ------------------------------------
-// ERREURS
-// ------------------------------------
-
-spotifyPlayer.addListener(
-"initialization_error",
-({ message }) => {
-
-```
-  console.error(
-    "Initialization error:",
-    message
+      console.error(
+        "Erreur initialisation:",
+        message
+      );
+    }
   );
 
-  statusText.textContent =
-    "Erreur du lecteur Spotify.";
 
-}
-```
+  spotifyPlayer.addListener(
+    "authentication_error",
+    ({ message }) => {
 
-);
-
-spotifyPlayer.addListener(
-"authentication_error",
-({ message }) => {
-
-```
-  console.error(
-    "Authentication error:",
-    message
+      console.error(
+        "Erreur authentification:",
+        message
+      );
+    }
   );
 
-  statusText.textContent =
-    "Erreur d'authentification Spotify.";
 
-}
-```
+  spotifyPlayer.addListener(
+    "account_error",
+    ({ message }) => {
 
-);
-
-spotifyPlayer.addListener(
-"account_error",
-({ message }) => {
-
-```
-  console.error(
-    "Account error:",
-    message
+      console.error(
+        "Erreur compte Spotify:",
+        message
+      );
+    }
   );
 
-  statusText.textContent =
-    "Spotify Premium est requis.";
 
-}
-```
+  spotifyPlayer.addListener(
+    "playback_error",
+    ({ message }) => {
 
-);
-
-spotifyPlayer.addListener(
-"playback_error",
-({ message }) => {
-
-```
-  console.error(
-    "Playback error:",
-    message
+      console.error(
+        "Erreur lecture:",
+        message
+      );
+    }
   );
 
-  statusText.textContent =
-    "Erreur pendant la lecture.";
 
-}
-```
-
-);
-
-// ------------------------------------
-// CHANGEMENT DE CHANSON
-// ------------------------------------
-
-spotifyPlayer.addListener(
-"player_state_changed",
-state => {
-
-```
-  if (!state) {
-
-    return;
-
-  }
-
-
-  const track =
-    state.track_window
-      ?.current_track;
-
-
-  if (!track) {
-
-    return;
-
-  }
-
-
-  songTitle.textContent =
-    track.name;
-
-
-  artistName.textContent =
-    track.artists
-      .map(
-        artist => artist.name
-      )
-      .join(", ");
-
-}
-```
-
-);
-
-// ------------------------------------
-// CONNECTER
-// ------------------------------------
-
-spotifyPlayer
-.connect()
-.then(success => {
-
-```
-  console.log(
-    "Spotify player connecté:",
-    success
-  );
-
-});
-```
-
+  spotifyPlayer.connect();
 }
 
-// ========================================
-// JOUER UNE CARTE
-// ========================================
+
+// ===============================
+// LANCER UNE CARTE
+// ===============================
 
 async function playCard(cardNumber) {
 
-cardNumber =
-Number(cardNumber);
+  if (!spotifyDeviceId) {
 
-if (!cardNumber) {
+    console.error(
+      "Lecteur Spotify pas prêt."
+    );
 
-```
-alert(
-  "Numéro de carte invalide."
-);
+    return;
+  }
 
-return;
-```
+  const response =
+    await fetch("cards.json");
 
-}
+  const cards =
+    await response.json();
 
-// Vérifier que le lecteur existe
+  const card =
+    cards.find(
+      c => Number(c.id) === Number(cardNumber)
+    );
 
-if (!spotifyDeviceId) {
+  if (!card) {
 
-```
-alert(
-  "Le lecteur Spotify n'est pas encore prêt."
-);
+    console.error(
+      "Carte introuvable:",
+      cardNumber
+    );
 
-return;
-```
+    return;
+  }
 
-}
+  const spotifyURI =
+    `spotify:track:${card.spotifyId}`;
 
-// Chercher la carte
+  console.log(
+    "Lecture:",
+    spotifyURI
+  );
 
-const card =
-cards.find(
-item =>
-Number(item.id) ===
-cardNumber
-);
 
-if (!card) {
-
-```
-alert(
-  `Carte ${cardNumber} introuvable.`
-);
-
-return;
-```
-
-}
-
-// ------------------------------------
-// IMPORTANT
-//
-// Chaque carte doit avoir :
-//
-// spotifyId:
-// "XXXXXXXXXXXX"
-// ------------------------------------
-
-if (!card.spotifyId) {
-
-```
-alert(
-  `La carte ${cardNumber} n'a pas encore de Spotify ID.`
-);
-
-console.error(
-  "Carte sans spotifyId:",
-  card
-);
-
-return;
-```
-
-}
-
-const spotifyURI =
-`spotify:track:${card.spotifyId}`;
-
-console.log(
-"Lecture:",
-spotifyURI
-);
-
-statusText.textContent =
-`Carte ${cardNumber} 🎵`;
-
-songTitle.textContent =
-"Chargement...";
-
-artistName.textContent =
-"Spotify";
-
-try {
-
-```
-const response =
+  // Transférer la lecture vers NoelHits
   await fetch(
-    "https://api.spotify.com/v1/me/player/play" +
-    `?device_id=${encodeURIComponent(
-      spotifyDeviceId
-    )}`,
+    "https://api.spotify.com/v1/me/player",
     {
-
-      method:
-        "PUT",
+      method: "PUT",
 
       headers: {
-
         Authorization:
           `Bearer ${accessToken}`,
 
         "Content-Type":
           "application/json"
-
       },
 
-      body:
-        JSON.stringify({
+      body: JSON.stringify({
+        device_ids: [
+          spotifyDeviceId
+        ],
 
-          uris:
-            [spotifyURI],
-
-          position_ms:
-            0
-
-        })
-
+        play: false
+      })
     }
   );
 
 
-if (!response.ok) {
+  // Jouer la chanson
+  const playResponse =
+    await fetch(
+      `https://api.spotify.com/v1/me/player/play?device_id=${spotifyDeviceId}`,
+      {
+        method: "PUT",
 
-  const errorText =
-    await response.text();
+        headers: {
+          Authorization:
+            `Bearer ${accessToken}`,
 
-  console.error(
-    "Spotify playback error:",
-    errorText
-  );
+          "Content-Type":
+            "application/json"
+        },
 
-
-  statusText.textContent =
-    "Spotify n'a pas pu lancer la chanson.";
-
-
-  return;
-
-}
-
-
-console.log(
-  "🎵 Chanson lancée!"
-);
+        body: JSON.stringify({
+          uris: [spotifyURI],
+          position_ms: 0
+        })
+      }
+    );
 
 
-statusText.textContent =
-  `🎵 Carte ${cardNumber} — lecture en cours`;
-```
+  if (!playResponse.ok) {
 
-} catch (error) {
+    const error =
+      await playResponse.text();
 
-```
-console.error(error);
-
-statusText.textContent =
-  "Erreur de communication avec Spotify.";
-```
-
-}
-}
-
-// ========================================
-// LIRE ?card=1 DANS L'URL
-// ========================================
-
-function checkCardFromURL() {
-
-const params =
-new URLSearchParams(
-window.location.search
-);
-
-const cardNumber =
-params.get("card");
-
-if (!cardNumber) {
-
-```
-return;
-```
-
-}
-
-console.log(
-"Carte trouvée dans URL:",
-cardNumber
-);
-
-playCard(cardNumber);
-
-}
-
-// ========================================
-// BOUTON PLAY / PAUSE
-// ========================================
-
-if (playButton) {
-
-playButton.addEventListener(
-"click",
-async () => {
-
-```
-  if (!spotifyPlayer) {
-
-    alert(
-      "Le lecteur Spotify n'est pas prêt."
+    console.error(
+      "Erreur Spotify:",
+      error
     );
 
     return;
-
   }
 
-
-  await spotifyPlayer.togglePlay();
-
-}
-```
-
-);
-
+  console.log(
+    "🎵 Chanson lancée!"
+  );
 }
 
-// ========================================
-// TEST MANUEL
-// ========================================
+
+// ===============================
+// CARTE DANS L'URL
+// ===============================
+
+function checkCardFromURL() {
+
+  const params =
+    new URLSearchParams(
+      window.location.search
+    );
+
+  const card =
+    params.get("card");
+
+  if (card) {
+
+    console.log(
+      "Carte détectée:",
+      card
+    );
+
+    playCard(card);
+  }
+}
+
+
+// ===============================
+// BOUTON DE TEST
+// ===============================
+
+const testButton =
+  document.getElementById(
+    "testButton"
+  );
 
 if (testButton) {
 
-testButton.addEventListener(
-"click",
-() => {
+  testButton.addEventListener(
+    "click",
+    () => {
 
-```
-  const cardNumber =
-    prompt(
-      "Quel numéro de carte veux-tu jouer ?"
-    );
+      const number =
+        prompt(
+          "Numéro de carte:"
+        );
 
-
-  if (
-    cardNumber !== null &&
-    cardNumber.trim() !== ""
-  ) {
-
-    playCard(
-      cardNumber.trim()
-    );
-
-  }
-
-}
-```
-
-);
-
+      if (number) {
+        playCard(number);
+      }
+    }
+  );
 }
 
-// ========================================
-// SPOTIFY SDK
-// ========================================
 
-window.onSpotifyWebPlaybackSDKReady =
-() => {
+// ===============================
+// DÉMARRAGE
+// ===============================
 
-```
-console.log(
-  "Spotify Web Playback SDK chargé."
-);
+if (
+  document.readyState ===
+  "loading"
+) {
 
-
-const savedToken =
-  localStorage.getItem(
-    "spotify_access_token"
+  document.addEventListener(
+    "DOMContentLoaded",
+    initialize
   );
 
+} else {
 
-if (savedToken) {
-
-  accessToken =
-    savedToken;
-
-
-  startApplication();
-
+  initialize();
 }
-```
-
-};
-
-// ========================================
-// INITIALISATION
-// ========================================
-
-(async function init() {
-
-await loadCards();
-
-await handleCallback();
-
-const savedToken =
-localStorage.getItem(
-"spotify_access_token"
-);
-
-if (
-savedToken &&
-!window.location.search.includes(
-"code="
-)
-) {
-
-```
-accessToken =
-  savedToken;
-
-
-// Le SDK appellera normalement
-// onSpotifyWebPlaybackSDKReady.
-
-if (
-  typeof Spotify !==
-  "undefined"
-) {
-
-  startApplication();
-
-}
-```
-
-}
-
-})();
